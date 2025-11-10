@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 
 error ReentranceDetected();
 
-contract ReentrancyGuard {
+abstract contract ReentrancyGuard {
     uint256 private constant ENTERED = 2;
     uint256 private constant NON_ENTERED = 1;
 
