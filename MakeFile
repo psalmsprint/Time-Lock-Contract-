@@ -1,0 +1,105 @@
+# Makefile for Foundry projects
+# Usage examples:
+#   make build
+#   make test
+#   make anvil
+#   make fuzz
+#   make clean
+
+# Tools (override on command line if needed)
+FORGE := forge
+ANVIL := anvil
+CAST  := cast
+
+# Configurable env vars (set in shell or CI):
+#   FORK_URL - RPC URL for forking tests
+#   PRIVATE_KEY - deployer key for deploy targets
+#   PORT - anvil port (default 8545)
+
+ANVIL_PORT ?= 8545
+FORK ?= $(FORK_URL)
+CI ?= false
+
+.PHONY: all build fmt lint test test-verbose fuzz coverage anvil stop-anvil clean deploy help
+
+# default
+all: test
+
+# Basic commands
+build:
+	$(FORGE) build
+
+fmt:
+	$(FORGE) fmt
+
+lint:
+	@echo "Running solhint + forge fmt check"
+	# run solhint if installed; no-op otherwise
+	@if command -v solhint >/dev/null 2>&1; then \
+	  solhint "src/**/*.sol" "test/**/*.t.sol" || true; \
+	else \
+	  echo "solhint not found — skipping"; \
+	fi
+	$(FORGE) fmt --check
+
+# Tests
+test:
+	$(FORGE) test
+
+test-verbose:
+	$(FORGE) test -vvv
+
+fuzz:
+	$(FORGE) test --fuzz
+
+coverage:
+	$(FORGE) coverage
+
+# Quick CI-friendly test target (useful in CI)
+ci-test:
+	@echo "Running CI tests (no interactive anvil)"; \
+	FOUNDRY_PROFILE=ci $(FORGE) test
+
+# Anvil helper
+anvil:
+	@echo "Starting anvil on port $(ANVIL_PORT)..."; \
+	$(ANVIL) -p $(ANVIL_PORT) --block-time 1 > /tmp/anvil.log 2>&1 & \
+	echo $$! > /tmp/anvil.pid; \
+	echo "anvil pid $(shell cat /tmp/anvil.pid) (log /tmp/anvil.log)"
+
+stop-anvil:
+	@if [ -f /tmp/anvil.pid ]; then \
+	  kill $$(cat /tmp/anvil.pid) && rm -f /tmp/anvil.pid; \
+	  echo "Stopped anvil"; \
+	else \
+	  echo "No anvil pid file found"; \
+	fi
+
+# Deploy helper (example; customize for your scripts)
+# Expects a deploy script at script/Deploy.s.sol or similar
+deploy:
+	@if [ -z "$(PRIVATE_KEY)" ]; then \
+	  echo "PRIVATE_KEY not set. Aborting deploy."; exit 1; \
+	fi
+	$(FORGE) script script/Deploy.s.sol:Deploy --private-key $(PRIVATE_KEY) --rpc-url $(FORK) --broadcast
+
+# Utility
+clean:
+	$(FORGE) clean
+	@rm -f /tmp/anvil.pid /tmp/anvil.log || true
+
+help:
+	@printf "\nAvailable targets:\n"
+	@printf "  make build        # compile contracts\n"
+	@printf "  make fmt          # format source\n"
+	@printf "  make lint         # lint + format-check\n"
+	@printf "  make test         # run tests\n"
+	@printf "  make test-verbose # run tests verbose\n"
+	@printf "  make fuzz         # run fuzz tests\n"
+	@printf "  make coverage     # run coverage\n"
+	@printf "  make anvil        # start anvil (background)\n"
+	@printf "  make stop-anvil   # stop background anvil\n"
+	@printf "  make deploy       # run deployment script (requires PRIVATE_KEY)\n"
+	@printf "  make clean        # clean build artifacts\n"
+	@printf "\n"
+
